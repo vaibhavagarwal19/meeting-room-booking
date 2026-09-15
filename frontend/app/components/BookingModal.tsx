@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { motion } from "framer-motion";
 import { X } from "lucide-react";
 
 type Room = {
@@ -86,7 +87,12 @@ export default function BookingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+        >
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">
@@ -176,7 +182,8 @@ export default function BookingModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    
+      </motion.div>
+</div>
   );
 }
