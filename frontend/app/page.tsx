@@ -1,5 +1,5 @@
 "use client";
-
+import BookingModal from "./components/BookingModal";
 import { useEffect, useState } from "react";
 
 type Room = {
@@ -15,7 +15,10 @@ type Booking = {
   start_time: string;
   end_time: string;
 };
-
+type SelectedRoom = {
+  id: number;
+  name: string;
+};
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function Home() {
@@ -27,7 +30,8 @@ export default function Home() {
   const [loadingBookings, setLoadingBookings] = useState(false);
 
   const [error, setError] = useState("");
-
+  const [selectedRoom, setSelectedRoom] =
+    useState<SelectedRoom | null>(null);
   // Fetch rooms once when the page loads
   useEffect(() => {
     async function fetchRooms() {
@@ -164,6 +168,7 @@ export default function Home() {
 
                   <button
                     type="button"
+                    onClick={() => setSelectedRoom(room)}
                     className="mt-6 w-full rounded-lg bg-black px-4 py-2 text-white hover:bg-gray-800"
                   >
                     Book Room
@@ -174,6 +179,16 @@ export default function Home() {
           </div>
         )}
       </div>
+      {selectedRoom && (
+        <BookingModal
+          room={selectedRoom}
+          date={selectedDate}
+          onClose={() => setSelectedRoom(null)}
+          onBookingCreated={() => {
+            window.location.reload();
+          }}
+        />
+      )}
     </main>
   );
 }
