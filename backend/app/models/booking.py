@@ -1,13 +1,4 @@
-from sqlalchemy import (
-    Column,
-    Date,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Time,
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Date, ForeignKey, Index, Integer, String, Time
 
 from ..database import Base
 
@@ -15,7 +6,7 @@ from ..database import Base
 class Booking(Base):
     __tablename__ = "bookings"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
 
     room_id = Column(
         Integer,
@@ -27,11 +18,6 @@ class Booking(Base):
     date = Column(Date, nullable=False)
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
-
-    room = relationship(
-        "Room",
-        back_populates="bookings",
-    )
 
     __table_args__ = (
         Index(

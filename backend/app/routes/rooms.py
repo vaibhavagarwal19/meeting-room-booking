@@ -23,10 +23,6 @@ router = APIRouter(
 def get_rooms(
     db: Session = Depends(get_db),
 ):
-    """
-    Return all pre-seeded meeting rooms.
-    """
-
     return (
         db.query(Room)
         .order_by(Room.id)
@@ -43,10 +39,6 @@ def get_room_bookings(
     booking_date: date = Query(..., alias="date"),
     db: Session = Depends(get_db),
 ):
-    """
-    Get bookings for a specific room and date.
-    """
-
     room = (
         db.query(Room)
         .filter(Room.id == room_id)
@@ -65,6 +57,9 @@ def get_room_bookings(
             Booking.room_id == room_id,
             Booking.date == booking_date,
         )
-        .order_by(Booking.start_time)
+        .order_by(
+            Booking.start_time,
+            Booking.id,
+        )
         .all()
     )

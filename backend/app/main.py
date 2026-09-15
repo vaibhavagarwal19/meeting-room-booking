@@ -1,61 +1,79 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from .database import Base, SessionLocal, engine
+from .database import Base, SessionLocal, engine, settings
 from .models import Room
 from .routes.bookings import router as bookings_router
 from .routes.rooms import router as rooms_router
 
 
-app = FastAPI(
-    title="Meeting Room Booking System",
-    version="1.0.0",
-)
+DEFAULT_ROOM_NAMES = [
+    "Meeting Room A",
+    "Meeting Room B",
+    "Meeting Room C",
+    "Meeting Room D",
+    "Meeting Room E",
+]
 
 
-# Allow the Next.js frontend to communicate
-# with the FastAPI backend during development.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def seed_rooms(db: Session) -> None:
+    existing = {name for (name,) in db.query(Room.name).all()}
+
+    missing = [
+        Room(name=name)
+        for name in DEFAULT_ROOM_NAMES
+        if name not in existing
+    ]
+
+    if not missing:
+        return
+
+    db.add_all(missing)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
 
 
-# Importing the models before create_all ensures
-# SQLAlchemy knows about all database tables.
-Base.metadata.create_all(bind=engine)
-
-
-def seed_rooms():
-    """
-    Create predefined rooms when the database is empty.
-    """
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
 
     try:
-        existing_rooms = db.query(Room).count()
-
-        if existing_rooms == 0:
-            rooms = [
-                Room(name="Meeting Room A"),
-                Room(name="Meeting Room B"),
-                Room(name="Meeting Room C"),
-                Room(name="Meeting Room D"),
-                Room(name="Meeting Room E"),
-            ]
-
-            db.add_all(rooms)
-            db.commit()
-
+        seed_rooms(db)
     finally:
         db.close()
 
+    yield
 
-seed_rooms()
+
+app = FastAPI(
+    title="Meeting Room Booking System",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+
+allowed_origins = [
+    origin.strip()
+    for origin in settings.ALLOWED_ORIGINS.split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 app.include_router(rooms_router)

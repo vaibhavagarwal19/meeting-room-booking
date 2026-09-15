@@ -12,6 +12,8 @@ from ..schemas.booking import (
     BookingResponse,
 )
 from ..services.booking_service import (
+    BookingConflictError,
+    BookingError,
     create_booking,
     find_next_available_slot,
 )
@@ -35,18 +37,14 @@ def get_bookings(
     room_id: int | None = None,
     db: Session = Depends(get_db),
 ):
-    """
-    Get bookings with optional room/date filters.
-    """
-
     query = db.query(Booking)
 
-    if booking_date:
+    if booking_date is not None:
         query = query.filter(
             Booking.date == booking_date
         )
 
-    if room_id:
+    if room_id is not None:
         query = query.filter(
             Booking.room_id == room_id
         )
@@ -56,6 +54,7 @@ def get_bookings(
         .order_by(
             Booking.date,
             Booking.start_time,
+            Booking.id,
         )
         .all()
     )
@@ -70,10 +69,6 @@ def create_new_booking(
     data: BookingCreate,
     db: Session = Depends(get_db),
 ):
-    """
-    Create a new meeting room booking.
-    """
-
     room = (
         db.query(Room)
         .filter(Room.id == data.room_id)
@@ -96,24 +91,22 @@ def create_new_booking(
             end_time=data.end_time,
         )
 
-        return {
-            "message": "Booking created successfully.",
-            "booking": booking,
-        }
+    except BookingConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
 
-    except ValueError as exc:
-        message = str(exc)
-
-        if "conflicts with existing booking" in message:
-            raise HTTPException(
-                status_code=409,
-                detail=message,
-            )
-
+    except BookingError as exc:
         raise HTTPException(
             status_code=400,
-            detail=message,
+            detail=str(exc),
         )
+
+    return {
+        "message": "Booking created successfully.",
+        "booking": booking,
+    }
 
 
 @router.delete(
@@ -123,10 +116,6 @@ def cancel_booking(
     booking_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Cancel/delete an existing booking.
-    """
-
     booking = (
         db.query(Booking)
         .filter(Booking.id == booking_id)
@@ -162,10 +151,6 @@ def next_available(
     ),
     db: Session = Depends(get_db),
 ):
-    """
-    Find the earliest available slot for a room.
-    """
-
     room = (
         db.query(Room)
         .filter(Room.id == room_id)
@@ -178,19 +163,12 @@ def next_available(
             detail="Room not found.",
         )
 
-    try:
-        result = find_next_available_slot(
-            db=db,
-            room_id=room_id,
-            booking_date=booking_date,
-            duration_minutes=duration,
-        )
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
+    result = find_next_available_slot(
+        db=db,
+        room_id=room_id,
+        booking_date=booking_date,
+        duration_minutes=duration,
+    )
 
     if result is None:
         return {

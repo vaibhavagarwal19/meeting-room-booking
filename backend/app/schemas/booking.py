@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class BookingCreate(BaseModel):
-    room_id: int
+    room_id: int = Field(gt=0)
     title: str = Field(min_length=1, max_length=200)
     date: date
     start_time: time
@@ -19,6 +19,14 @@ class BookingCreate(BaseModel):
             raise ValueError("Booking title cannot be empty.")
 
         return value
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_time(cls, value: time) -> time:
+        if value.tzinfo is not None:
+            raise ValueError("Times must not include a timezone offset.")
+
+        return value.replace(second=0, microsecond=0)
 
 
 class BookingResponse(BaseModel):

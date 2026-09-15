@@ -4,7 +4,7 @@ import BookingModal from "./components/BookingModal";
 import Toast from "./components/Toast";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-
+import ConfirmModal from "./components/ConfirmModal";
 type Room = {
   id: number;
   name: string;
@@ -38,7 +38,10 @@ export default function Home() {
 
   const [selectedRoom, setSelectedRoom] =
     useState<SelectedRoom | null>(null);
+  const [bookingToCancel, setBookingToCancel] =
+    useState<Booking | null>(null);
 
+  const [cancelling, setCancelling] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -88,10 +91,16 @@ export default function Home() {
   }
 
   // Cancel an existing booking
-  async function handleCancelBooking(bookingId: number) {
+  async function handleCancelBooking() {
+    if (!bookingToCancel) {
+      return;
+    }
+
     try {
+      setCancelling(true);
+
       const response = await fetch(
-        `${API_URL}/bookings/${bookingId}`,
+        `${API_URL}/bookings/${bookingToCancel.id}`,
         {
           method: "DELETE",
         }
@@ -101,7 +110,8 @@ export default function Home() {
 
       if (!response.ok) {
         setToast({
-          message: data.detail || "Unable to cancel booking.",
+          message:
+            data.detail || "Unable to cancel booking.",
           type: "error",
         });
 
@@ -113,12 +123,16 @@ export default function Home() {
         type: "success",
       });
 
+      setBookingToCancel(null);
+
       await fetchBookings();
     } catch {
       setToast({
         message: "Unable to connect to the server.",
         type: "error",
       });
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -216,11 +230,11 @@ export default function Home() {
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-black">
             Meeting Room Booking
           </h1>
 
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-black">
             View and manage meeting room bookings.
           </p>
         </div>
@@ -231,7 +245,7 @@ export default function Home() {
           <div>
             <label
               htmlFor="date"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-black"
             >
               Select Date
             </label>
@@ -252,7 +266,7 @@ export default function Home() {
           <div>
             <label
               htmlFor="room-filter"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-black"
             >
               Filter by Room
             </label>
@@ -285,7 +299,7 @@ export default function Home() {
           <div>
             <label
               htmlFor="duration"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-black"
             >
               Duration (minutes)
             </label>
@@ -314,11 +328,11 @@ export default function Home() {
 
         {/* Rooms */}
         {loadingRooms ? (
-          <p className="mt-8 text-gray-600">
+          <p className="mt-8 text-black">
             Loading rooms...
           </p>
         ) : rooms.length === 0 ? (
-          <p className="mt-8 text-gray-600">
+          <p className="mt-8 text-black">
             No rooms available.
           </p>
         ) : (
@@ -344,18 +358,18 @@ export default function Home() {
                     className="rounded-xl border bg-white p-6 shadow-sm"
                   >
                     {/* Room name */}
-                    <h2 className="text-xl font-semibold text-gray-900">
+                    <h2 className="text-xl font-semibold text-black">
                       {room.name}
                     </h2>
 
                     {/* Bookings */}
                     <div className="mt-5">
                       {loadingBookings ? (
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-black">
                           Loading bookings...
                         </p>
                       ) : roomBookings.length === 0 ? (
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-black">
                           No bookings for this date.
                         </p>
                       ) : (
@@ -370,11 +384,11 @@ export default function Home() {
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="font-medium text-gray-900">
+                                  <p className="font-medium text-black">
                                     {booking.title}
                                   </p>
 
-                                  <p className="mt-1 text-sm text-gray-600">
+                                  <p className="mt-1 text-sm text-black">
                                     {booking.start_time.slice(
                                       0,
                                       5
@@ -389,11 +403,7 @@ export default function Home() {
 
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    handleCancelBooking(
-                                      booking.id
-                                    )
-                                  }
+                                  onClick={() => setBookingToCancel(booking)}
                                   className="text-sm font-medium text-red-600 hover:text-red-800"
                                 >
                                   Cancel
@@ -423,7 +433,7 @@ export default function Home() {
                         checkNextAvailable(room.id)
                       }
                       disabled={checkingAvailability}
-                      className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 text-black hover:bg-gray-50 disabled:opacity-50"
                     >
                       {checkingAvailability
                         ? "Checking..."
@@ -470,6 +480,19 @@ export default function Home() {
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+        />
+      )}
+      {/* Cancellation confirmation */}
+      {bookingToCancel && (
+        <ConfirmModal
+          title="Cancel booking?"
+          message={`Are you sure you want to cancel "${bookingToCancel.title}" from ${bookingToCancel.start_time.slice(
+            0,
+            5
+          )} to ${bookingToCancel.end_time.slice(0, 5)}?`}
+          onConfirm={handleCancelBooking}
+          onCancel={() => setBookingToCancel(null)}
+          loading={cancelling}
         />
       )}
     </main>

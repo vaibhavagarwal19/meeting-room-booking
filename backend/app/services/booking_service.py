@@ -1,88 +1,62 @@
-from datetime import datetime, time, timedelta
+from datetime import date as date_type, datetime, time, timedelta
 
 from sqlalchemy.orm import Session
 
 from ..models.booking import Booking
+from ..models.room import Room
 
 
 WORKING_START = time(9, 0)
 WORKING_END = time(18, 0)
 
 
-def validate_booking_time(start_time: time, end_time: time) -> None:
-    """
-    Validate that a booking has a valid time range
-    and stays within working hours.
-    """
+class BookingError(ValueError):
+    pass
 
+
+class BookingConflictError(BookingError):
+    pass
+
+
+def validate_booking_time(start_time: time, end_time: time) -> None:
     if start_time >= end_time:
-        raise ValueError("End time must be after start time.")
+        raise BookingError("End time must be after start time.")
 
     if start_time < WORKING_START or end_time > WORKING_END:
-        raise ValueError(
-            "Bookings must be between 09:00 and 18:00."
-        )
+        raise BookingError("Bookings must be between 09:00 and 18:00.")
 
 
 def find_conflict(
     db: Session,
     room_id: int,
-    booking_date,
+    booking_date: date_type,
     start_time: time,
     end_time: time,
 ):
-    """
-    Find an existing booking that overlaps with
-    the requested time.
-
-    Two bookings are allowed to touch:
-        10:00 - 11:00
-        11:00 - 12:00
-
-    because they do not overlap.
-    """
-
-    existing_bookings = (
+    return (
         db.query(Booking)
         .filter(
             Booking.room_id == room_id,
             Booking.date == booking_date,
+            Booking.start_time < end_time,
+            Booking.end_time > start_time,
         )
         .order_by(Booking.start_time)
-        .all()
+        .first()
     )
-
-    for booking in existing_bookings:
-
-        # Overlap exists when:
-        #
-        # new_start < existing_end
-        # AND
-        # new_end > existing_start
-        #
-        # This allows back-to-back bookings.
-        if (
-            start_time < booking.end_time
-            and end_time > booking.start_time
-        ):
-            return booking
-
-    return None
 
 
 def create_booking(
     db: Session,
     room_id: int,
     title: str,
-    booking_date,
+    booking_date: date_type,
     start_time: time,
     end_time: time,
 ):
-    """
-    Create a booking after validating time and conflicts.
-    """
-
     validate_booking_time(start_time, end_time)
+
+    db.query(Room.id).filter(Room.id == room_id).with_for_update().first()
 
     conflict = find_conflict(
         db=db,
@@ -96,7 +70,9 @@ def create_booking(
         start = conflict.start_time.strftime("%H:%M")
         end = conflict.end_time.strftime("%H:%M")
 
-        raise ValueError(
+        db.rollback()
+
+        raise BookingConflictError(
             f"Booking conflicts with existing booking "
             f"'{conflict.title}' ({start} - {end})."
         )
@@ -119,23 +95,9 @@ def create_booking(
 def find_next_available_slot(
     db: Session,
     room_id: int,
-    booking_date,
+    booking_date: date_type,
     duration_minutes: int,
 ):
-    """
-    Find the earliest available slot for the requested duration.
-
-    Searches:
-    1. Before the first booking
-    2. Between existing bookings
-    3. After the last booking
-    """
-
-    if duration_minutes <= 0:
-        raise ValueError(
-            "Duration must be greater than 0 minutes."
-        )
-
     bookings = (
         db.query(Booking)
         .filter(
@@ -146,44 +108,23 @@ def find_next_available_slot(
         .all()
     )
 
-    current_time = datetime.combine(
-        booking_date,
-        WORKING_START,
-    )
-
-    working_end = datetime.combine(
-        booking_date,
-        WORKING_END,
-    )
-
+    current_time = datetime.combine(booking_date, WORKING_START)
+    working_end = datetime.combine(booking_date, WORKING_END)
     duration = timedelta(minutes=duration_minutes)
 
     for booking in bookings:
+        booking_start = datetime.combine(booking_date, booking.start_time)
+        booking_end = datetime.combine(booking_date, booking.end_time)
 
-        booking_start = datetime.combine(
-            booking_date,
-            booking.start_time,
-        )
-
-        booking_end = datetime.combine(
-            booking_date,
-            booking.end_time,
-        )
-
-        # Check whether the requested duration fits
-        # before this booking.
-        if current_time + duration <= booking_start:
+        if current_time + duration <= min(booking_start, working_end):
             return {
                 "start_time": current_time.time(),
                 "end_time": (current_time + duration).time(),
             }
 
-        # Move current_time forward if this booking
-        # ends later than our current position.
         if booking_end > current_time:
             current_time = booking_end
 
-    # Check the remaining time after the final booking.
     if current_time + duration <= working_end:
         return {
             "start_time": current_time.time(),
