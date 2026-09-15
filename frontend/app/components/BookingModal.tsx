@@ -12,7 +12,7 @@ type BookingModalProps = {
   room: Room;
   date: string;
   onClose: () => void;
-  onBookingCreated: () => void;
+  onBookingCreated: (message: string) => void;
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -75,7 +75,7 @@ export default function BookingModal({
         return;
       }
 
-      onBookingCreated();
+      onBookingCreated(data.message);
       onClose();
     } catch {
       setError("Unable to connect to the server.");

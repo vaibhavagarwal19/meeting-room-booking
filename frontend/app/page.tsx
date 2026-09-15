@@ -1,5 +1,6 @@
 "use client";
 import BookingModal from "./components/BookingModal";
+import Toast from "./components/Toast";
 import { useEffect, useState } from "react";
 
 type Room = {
@@ -32,6 +33,68 @@ export default function Home() {
   const [error, setError] = useState("");
   const [selectedRoom, setSelectedRoom] =
     useState<SelectedRoom | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);  
+
+  async function fetchBookings() {
+    try {
+      setLoadingBookings(true);
+
+      const response = await fetch(
+        `${API_URL}/bookings?date=${selectedDate}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch bookings.");
+      }
+
+      const data = await response.json();
+      setBookings(data);
+    } catch {
+      setToast({
+        message: "Unable to load bookings.",
+        type: "error",
+      });
+    } finally {
+      setLoadingBookings(false);
+    }
+  }
+
+  async function handleCancelBooking(bookingId: number) {
+    try {
+      const response = await fetch(
+        `${API_URL}/bookings/${bookingId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setToast({
+          message: data.detail || "Unable to cancel booking.",
+          type: "error",
+        });
+
+        return;
+      }
+
+      setToast({
+        message: data.message,
+        type: "success",
+      });
+
+      await fetchBookings();
+    } catch {
+      setToast({
+        message: "Unable to connect to the server.",
+        type: "error",
+      });
+    }
+  }
   // Fetch rooms once when the page loads
   useEffect(() => {
     async function fetchRooms() {
@@ -56,27 +119,6 @@ export default function Home() {
 
   // Fetch bookings whenever the selected date changes
   useEffect(() => {
-    async function fetchBookings() {
-      try {
-        setLoadingBookings(true);
-
-        const response = await fetch(
-          `${API_URL}/bookings?date=${selectedDate}`
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch bookings.");
-        }
-
-        const data = await response.json();
-        setBookings(data);
-      } catch {
-        setError("Unable to load bookings.");
-      } finally {
-        setLoadingBookings(false);
-      }
-    }
-
     fetchBookings();
   }, [selectedDate]);
 
@@ -149,18 +191,30 @@ export default function Home() {
                       <div className="space-y-3">
                         {roomBookings.map((booking) => (
                           <div
-                            key={booking.id}
-                            className="rounded-lg bg-gray-100 p-3"
-                          >
-                            <p className="font-medium text-gray-900">
-                              {booking.title}
-                            </p>
+                          key={booking.id}
+                          className="rounded-lg bg-gray-100 p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {booking.title}
+                              </p>
 
-                            <p className="mt-1 text-sm text-gray-600">
-                              {booking.start_time.slice(0, 5)} -{" "}
-                              {booking.end_time.slice(0, 5)}
-                            </p>
+                              <p className="mt-1 text-sm text-gray-600">
+                                {booking.start_time.slice(0, 5)} -{" "}
+                                {booking.end_time.slice(0, 5)}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCancelBooking(booking.id)}
+                              className="text-sm font-medium text-red-600 hover:text-red-800"
+                            >
+                              Cancel
+                            </button>
                           </div>
+                        </div>
                         ))}
                       </div>
                     )}
@@ -184,9 +238,21 @@ export default function Home() {
           room={selectedRoom}
           date={selectedDate}
           onClose={() => setSelectedRoom(null)}
-          onBookingCreated={() => {
-            window.location.reload();
+          onBookingCreated={(message) => {
+            fetchBookings();
+
+            setToast({
+              message,
+              type: "success",
+            });
           }}
+        />
+      )}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
         />
       )}
     </main>
