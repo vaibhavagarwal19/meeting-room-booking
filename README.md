@@ -4,7 +4,15 @@ Book meeting rooms by room and date, with overlap detection and a "find me the n
 
 A FastAPI + PostgreSQL backend serving a Next.js frontend.
 
-**Live demo** — frontend: _add your Vercel URL_ · API docs: _add your Render URL_`/docs`
+**Live demo**
+
+| | |
+|---|---|
+| Frontend | <https://meeting-room-booking-two-pi.vercel.app> |
+| API | <https://meeting-room-booking-ai4a.onrender.com> |
+| API docs | <https://meeting-room-booking-ai4a.onrender.com/docs> |
+
+> The API is on Render's free tier and sleeps after 15 minutes idle. If the first load looks stuck, give it ~50 seconds to wake up.
 
 ---
 
@@ -124,6 +132,7 @@ meeting-room-booking/
 │   │   ├── conftest.py                 in-memory SQLite fixtures
 │   │   ├── test_bookings.py            rules, overlap, boundaries, cancellation
 │   │   └── test_concurrency.py         real-Postgres race test (skipped by default)
+│   ├── requirements.txt                backend dependencies
 │   └── .env.example
 ├── frontend/
 │   ├── app/
@@ -137,7 +146,6 @@ meeting-room-booking/
 │   ├── public/
 │   └── .env.example
 ├── render.yaml                         Render blueprint (API + database)
-├── requirements.txt                    backend dependencies
 └── requirements-dev.txt                test dependencies
 ```
 
@@ -171,7 +179,7 @@ From the repository root:
 
 ```bash
 python3 -m venv venv
-venv/bin/pip install -r requirements.txt
+venv/bin/pip install -r backend/requirements.txt
 ```
 
 ### 3. Configure
@@ -216,7 +224,7 @@ this value. It is read at **build** time, so changing it means rebuilding, not j
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
 | `DATABASE_URL` | yes | — | PostgreSQL connection string. |
-| `ALLOWED_ORIGINS` | no | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated origins allowed to call the API. Set this to your Vercel domain in production or the browser will block every request. |
+| `ALLOWED_ORIGINS` | no | localhost:3000, 127.0.0.1:3000 and the deployed Vercel domain | Comma-separated origins allowed to call the API. The deployed frontend is in the default list, so the live demo works without setting this; override it if you deploy the frontend somewhere else. Unlisted origins are rejected. |
 
 ### Frontend (`frontend/.env.local`)
 
@@ -520,7 +528,7 @@ The repository includes `render.yaml`, so the whole service can be provisioned f
 | Type | Web Service |
 | Runtime | Python 3 |
 | Root directory | *(leave blank — the repository root)* |
-| Build command | `pip install -r requirements.txt` |
+| Build command | `pip install -r backend/requirements.txt` |
 | Start command | `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 | Health check path | `/` |
 
@@ -584,6 +592,16 @@ Open the Vercel URL and confirm:
 Things deliberately out of scope, or known rough edges — listed so they are not mistaken for
 oversights.
 
+**Known gaps in the booking rules**
+
+- **Bookings in the past are accepted.** `POST /api/bookings` with `2020-01-01` succeeds. The
+  validation covers working hours, ordering and overlap, but never compares the date to today.
+  The date picker makes this awkward to hit by accident, but the API allows it outright. This is
+  the one rule I would add first.
+- **Zero-duration input is caught late.** Clearing the duration field sends `0`, which the API
+  rejects with a `422` that the UI surfaces as a readable message. Correct, but the input should
+  refuse the value rather than round-trip it to the server.
+
 **Not built**
 
 - **No authentication or user accounts.** Bookings are anonymous and anyone can cancel anyone
@@ -616,6 +634,16 @@ oversights.
   default.
 - **No structured logging or error tracking.** Failures surface as stack traces in the Render
   log stream.
+- **Modals are not keyboard accessible.** They do not close on Escape, do not trap focus, and
+  ignore clicks on the backdrop. Usable with a mouse, awkward with a keyboard, poor with a
+  screen reader.
+- **The Geist font never renders.** `layout.tsx` loads it, but `globals.css` ends with
+  `font-family: Arial, Helvetica, sans-serif`, which overrides it. Cosmetic, and left alone
+  because changing it restyles every screen.
+- **The app is light-mode only.** The starter's `prefers-color-scheme: dark` block was removed:
+  it flipped the text colour to near-white while every panel stayed white, so form fields became
+  invisible on machines set to dark mode. Removing it was the fix; a real dark theme was not
+  built.
 
 **Hosting caveats**
 

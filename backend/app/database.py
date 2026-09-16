@@ -10,7 +10,11 @@ ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 class Settings(BaseSettings):
     DATABASE_URL: str
-    ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    ALLOWED_ORIGINS: str = (
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000,"
+        "https://meeting-room-booking-two-pi.vercel.app"
+    )
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
