@@ -18,7 +18,24 @@ type BookingModalProps = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-// FastAPI sends a string detail for 400/409 but an array of objects for 422.
+const OPENING_MINUTES = 9 * 60;
+const CLOSING_MINUTES = 18 * 60;
+const SLOT_MINUTES = 30;
+
+function toTimeValue(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+const TIME_SLOTS = Array.from(
+  { length: (CLOSING_MINUTES - OPENING_MINUTES) / SLOT_MINUTES + 1 },
+  (_, index) => toTimeValue(OPENING_MINUTES + index * SLOT_MINUTES)
+);
+
+const START_SLOTS = TIME_SLOTS.slice(0, -1);
+const END_SLOTS = TIME_SLOTS.slice(1);
+
 function errorDetail(data: unknown, fallback: string) {
   const detail = (data as { detail?: unknown })?.detail;
 
@@ -50,12 +67,26 @@ export default function BookingModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const endSlots = END_SLOTS.filter((slot) => slot > startTime);
+
+  function handleStartTimeChange(value: string) {
+    setStartTime(value);
+
+    if (!value) {
+      setEndTime("");
+      return;
+    }
+
+    if (endTime <= value) {
+      setEndTime(END_SLOTS.find((slot) => slot > value) ?? "");
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setError("");
 
-    // Client-side validation
     if (!title.trim()) {
       setError("Booking title is required.");
       return;
@@ -148,33 +179,54 @@ export default function BookingModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="start-time"
+              className="block text-sm font-medium text-gray-700"
+            >
               Start Time
             </label>
 
-            <input
-              type="time"
-              min="09:00"
-              max="18:00"
+            <select
+              id="start-time"
               value={startTime}
-              onChange={(event) => setStartTime(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400"
-            />
+              onChange={(event) => handleStartTimeChange(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900"
+            >
+              <option value="">Select a start time</option>
+
+              {START_SLOTS.map((slot) => (
+                <option key={slot} value={slot}>
+                  {slot}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="end-time"
+              className="block text-sm font-medium text-gray-700"
+            >
               End Time
             </label>
 
-            <input
-              type="time"
-              min="09:00"
-              max="18:00"
+            <select
+              id="end-time"
               value={endTime}
               onChange={(event) => setEndTime(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400"
-            />
+              disabled={!startTime}
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-100 disabled:text-gray-400"
+            >
+              <option value="">
+                {startTime ? "Select an end time" : "Select a start time first"}
+              </option>
+
+              {endSlots.map((slot) => (
+                <option key={slot} value={slot}>
+                  {slot}
+                </option>
+              ))}
+            </select>
           </div>
 
           {error && (

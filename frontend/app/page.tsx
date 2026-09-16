@@ -30,7 +30,6 @@ function todayAsDateValue() {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-// FastAPI sends a string detail for 400/409 but an array of objects for 422.
 function errorDetail(data: unknown, fallback: string) {
   const detail = (data as { detail?: unknown })?.detail;
 
@@ -70,29 +69,22 @@ export default function Home() {
     type: "success" | "error";
   } | null>(null);
 
-  // Room filter
   const [selectedRoomFilter, setSelectedRoomFilter] =
     useState<number | "all">("all");
 
-  // Duration used for next-available search
   const [duration, setDuration] = useState(30);
 
-  // Stores the next available slot returned by the backend
   const [nextAvailable, setNextAvailable] = useState<{
     roomId: number;
     startTime: string;
     endTime: string;
   } | null>(null);
 
-  // Which room is currently being checked, so one card does not
-  // disable the buttons on every other card.
   const [checkingRoomId, setCheckingRoomId] =
     useState<number | null>(null);
 
-  // Guards against a slow earlier response overwriting a newer one.
   const bookingsRequestRef = useRef(0);
 
-  // Fetch bookings for the selected date
   const fetchBookings = useCallback(async () => {
     const requestId = bookingsRequestRef.current + 1;
 
@@ -130,7 +122,6 @@ export default function Home() {
     }
   }, [selectedDate]);
 
-  // Cancel an existing booking
   async function handleCancelBooking() {
     if (!bookingToCancel) {
       return;
@@ -179,7 +170,6 @@ export default function Home() {
     }
   }
 
-  // Find the earliest available slot for a room
   async function checkNextAvailable(roomId: number) {
     try {
       setCheckingRoomId(roomId);
@@ -235,7 +225,6 @@ export default function Home() {
     }
   }
 
-  // Fetch rooms once when the page loads
   useEffect(() => {
     async function fetchRooms() {
       try {
@@ -258,7 +247,6 @@ export default function Home() {
     fetchRooms();
   }, []);
 
-  // Fetch bookings whenever the selected date changes
   useEffect(() => {
     async function loadBookings() {
       await fetchBookings();
@@ -267,7 +255,6 @@ export default function Home() {
     loadBookings();
   }, [fetchBookings]);
 
-  // Get bookings belonging to a specific room
   function getRoomBookings(roomId: number) {
     return bookings.filter(
       (booking) => booking.room_id === roomId
@@ -277,7 +264,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="mx-auto max-w-6xl">
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
             Meeting Room Booking
@@ -288,9 +274,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Filters */}
         <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end">
-          {/* Date */}
           <div>
             <label
               htmlFor="date"
@@ -312,7 +296,6 @@ export default function Home() {
             />
           </div>
 
-          {/* Room filter */}
           <div>
             <label
               htmlFor="room-filter"
@@ -345,7 +328,6 @@ export default function Home() {
             </select>
           </div>
 
-          {/* Duration */}
           <div>
             <label
               htmlFor="duration"
@@ -369,14 +351,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <p className="mt-6 rounded-lg bg-red-50 p-4 text-red-600">
             {error}
           </p>
         )}
 
-        {/* Rooms */}
         {loadingRooms ? (
           <p className="mt-8 text-gray-600">
             Loading rooms...
@@ -407,12 +387,10 @@ export default function Home() {
                     }}
                     className="rounded-xl border bg-white p-6 shadow-sm"
                   >
-                    {/* Room name */}
                     <h2 className="text-xl font-semibold text-gray-900">
                       {room.name}
                     </h2>
 
-                    {/* Bookings */}
                     <div className="mt-5">
                       {loadingBookings ? (
                         <p className="text-sm text-gray-500">
@@ -465,7 +443,6 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Book Room */}
                     <motion.button
                         type="button"
                         onClick={() => setSelectedRoom(room)}
@@ -476,7 +453,6 @@ export default function Home() {
                       Book Room
                     </motion.button>
 
-                    {/* Next Available */}
                     <button
                       type="button"
                       onClick={() =>
@@ -490,7 +466,6 @@ export default function Home() {
                         : "Find Next Available"}
                     </button>
 
-                    {/* Next available result */}
                     {nextAvailable?.roomId === room.id && (
                       <div className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-700">
                         Next available:{" "}
@@ -507,7 +482,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Booking Modal */}
       {selectedRoom && (
         <BookingModal
           room={selectedRoom}
@@ -525,7 +499,6 @@ export default function Home() {
         />
       )}
 
-      {/* Toast */}
       <AnimatePresence>
         {toast && (
           <Toast
@@ -536,7 +509,6 @@ export default function Home() {
           />
         )}
       </AnimatePresence>
-      {/* Cancellation confirmation */}
       {bookingToCancel && (
         <ConfirmModal
           title="Cancel booking?"
