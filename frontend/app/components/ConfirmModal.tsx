@@ -52,7 +52,7 @@ export default function ConfirmModal({
         </div>
 
         {/* Message */}
-        <p className="mt-4 text-sm leading-6 text-black">
+        <p className="mt-4 text-sm leading-6 text-gray-600">
           {message}
         </p>
 

@@ -2,9 +2,10 @@
 
 import BookingModal from "./components/BookingModal";
 import Toast from "./components/Toast";
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ConfirmModal from "./components/ConfirmModal";
+
 type Room = {
   id: number;
   name: string;
@@ -19,25 +20,47 @@ type Booking = {
   end_time: string;
 };
 
-type SelectedRoom = {
-  id: number;
-  name: string;
-};
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+function todayAsDateValue() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+// FastAPI sends a string detail for 400/409 but an array of objects for 422.
+function errorDetail(data: unknown, fallback: string) {
+  const detail = (data as { detail?: unknown })?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: string } | undefined;
+
+    if (typeof first?.msg === "string") {
+      return first.msg;
+    }
+  }
+
+  return fallback;
+}
 
 export default function Home() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [selectedDate, setSelectedDate] = useState("2026-09-15");
+  const [selectedDate, setSelectedDate] = useState(todayAsDateValue);
 
   const [loadingRooms, setLoadingRooms] = useState(true);
-  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [loadingBookings, setLoadingBookings] = useState(true);
 
   const [error, setError] = useState("");
 
   const [selectedRoom, setSelectedRoom] =
-    useState<SelectedRoom | null>(null);
+    useState<Room | null>(null);
   const [bookingToCancel, setBookingToCancel] =
     useState<Booking | null>(null);
 
@@ -61,14 +84,21 @@ export default function Home() {
     endTime: string;
   } | null>(null);
 
-  const [checkingAvailability, setCheckingAvailability] =
-    useState(false);
+  // Which room is currently being checked, so one card does not
+  // disable the buttons on every other card.
+  const [checkingRoomId, setCheckingRoomId] =
+    useState<number | null>(null);
+
+  // Guards against a slow earlier response overwriting a newer one.
+  const bookingsRequestRef = useRef(0);
 
   // Fetch bookings for the selected date
-  async function fetchBookings() {
-    try {
-      setLoadingBookings(true);
+  const fetchBookings = useCallback(async () => {
+    const requestId = bookingsRequestRef.current + 1;
 
+    bookingsRequestRef.current = requestId;
+
+    try {
       const response = await fetch(
         `${API_URL}/bookings?date=${selectedDate}`
       );
@@ -79,16 +109,26 @@ export default function Home() {
 
       const data = await response.json();
 
+      if (requestId !== bookingsRequestRef.current) {
+        return;
+      }
+
       setBookings(data);
     } catch {
+      if (requestId !== bookingsRequestRef.current) {
+        return;
+      }
+
       setToast({
         message: "Unable to load bookings.",
         type: "error",
       });
     } finally {
-      setLoadingBookings(false);
+      if (requestId === bookingsRequestRef.current) {
+        setLoadingBookings(false);
+      }
     }
-  }
+  }, [selectedDate]);
 
   // Cancel an existing booking
   async function handleCancelBooking() {
@@ -110,8 +150,10 @@ export default function Home() {
 
       if (!response.ok) {
         setToast({
-          message:
-            data.detail || "Unable to cancel booking.",
+          message: errorDetail(
+            data,
+            "Unable to cancel booking."
+          ),
           type: "error",
         });
 
@@ -124,6 +166,7 @@ export default function Home() {
       });
 
       setBookingToCancel(null);
+      setNextAvailable(null);
 
       await fetchBookings();
     } catch {
@@ -139,7 +182,7 @@ export default function Home() {
   // Find the earliest available slot for a room
   async function checkNextAvailable(roomId: number) {
     try {
-      setCheckingAvailability(true);
+      setCheckingRoomId(roomId);
       setNextAvailable(null);
 
       const response = await fetch(
@@ -150,8 +193,10 @@ export default function Home() {
 
       if (!response.ok) {
         setToast({
-          message:
-            data.detail || "Unable to check availability.",
+          message: errorDetail(
+            data,
+            "Unable to check availability."
+          ),
           type: "error",
         });
 
@@ -186,7 +231,7 @@ export default function Home() {
         type: "error",
       });
     } finally {
-      setCheckingAvailability(false);
+      setCheckingRoomId(null);
     }
   }
 
@@ -215,8 +260,12 @@ export default function Home() {
 
   // Fetch bookings whenever the selected date changes
   useEffect(() => {
-    fetchBookings();
-  }, [selectedDate]);
+    async function loadBookings() {
+      await fetchBookings();
+    }
+
+    loadBookings();
+  }, [fetchBookings]);
 
   // Get bookings belonging to a specific room
   function getRoomBookings(roomId: number) {
@@ -230,11 +279,11 @@ export default function Home() {
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-black">
+          <h1 className="text-3xl font-bold text-gray-900">
             Meeting Room Booking
           </h1>
 
-          <p className="mt-2 text-black">
+          <p className="mt-2 text-gray-600">
             View and manage meeting room bookings.
           </p>
         </div>
@@ -245,7 +294,7 @@ export default function Home() {
           <div>
             <label
               htmlFor="date"
-              className="block text-sm font-medium text-black"
+              className="block text-sm font-medium text-gray-700"
             >
               Select Date
             </label>
@@ -255,10 +304,11 @@ export default function Home() {
               type="date"
               value={selectedDate}
               onChange={(event) => {
+                setLoadingBookings(true);
                 setSelectedDate(event.target.value);
                 setNextAvailable(null);
               }}
-              className="mt-2 rounded-lg border border-gray-300 bg-white px-4 py-2"
+              className="mt-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900"
             />
           </div>
 
@@ -266,7 +316,7 @@ export default function Home() {
           <div>
             <label
               htmlFor="room-filter"
-              className="block text-sm font-medium text-black"
+              className="block text-sm font-medium text-gray-700"
             >
               Filter by Room
             </label>
@@ -283,7 +333,7 @@ export default function Home() {
 
                 setNextAvailable(null);
               }}
-              className="mt-2 rounded-lg border border-gray-300 bg-white px-4 py-2"
+              className="mt-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900"
             >
               <option value="all">All Rooms</option>
 
@@ -299,7 +349,7 @@ export default function Home() {
           <div>
             <label
               htmlFor="duration"
-              className="block text-sm font-medium text-black"
+              className="block text-sm font-medium text-gray-700"
             >
               Duration (minutes)
             </label>
@@ -314,7 +364,7 @@ export default function Home() {
                 setDuration(Number(event.target.value));
                 setNextAvailable(null);
               }}
-              className="mt-2 w-32 rounded-lg border border-gray-300 bg-white px-4 py-2"
+              className="mt-2 w-32 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900"
             />
           </div>
         </div>
@@ -328,11 +378,11 @@ export default function Home() {
 
         {/* Rooms */}
         {loadingRooms ? (
-          <p className="mt-8 text-black">
+          <p className="mt-8 text-gray-600">
             Loading rooms...
           </p>
         ) : rooms.length === 0 ? (
-          <p className="mt-8 text-black">
+          <p className="mt-8 text-gray-600">
             No rooms available.
           </p>
         ) : (
@@ -343,7 +393,7 @@ export default function Home() {
                   selectedRoomFilter === "all" ||
                   room.id === selectedRoomFilter
               )
-              .map((room) => {
+              .map((room, index) => {
                 const roomBookings = getRoomBookings(room.id);
 
                 return (
@@ -353,23 +403,23 @@ export default function Home() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
                       duration: 0.25,
-                      delay: room.id * 0.05,
+                      delay: index * 0.05,
                     }}
                     className="rounded-xl border bg-white p-6 shadow-sm"
                   >
                     {/* Room name */}
-                    <h2 className="text-xl font-semibold text-black">
+                    <h2 className="text-xl font-semibold text-gray-900">
                       {room.name}
                     </h2>
 
                     {/* Bookings */}
                     <div className="mt-5">
                       {loadingBookings ? (
-                        <p className="text-sm text-black">
+                        <p className="text-sm text-gray-500">
                           Loading bookings...
                         </p>
                       ) : roomBookings.length === 0 ? (
-                        <p className="text-sm text-black">
+                        <p className="text-sm text-gray-500">
                           No bookings for this date.
                         </p>
                       ) : (
@@ -384,11 +434,11 @@ export default function Home() {
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="font-medium text-black">
+                                  <p className="font-medium text-gray-900">
                                     {booking.title}
                                   </p>
 
-                                  <p className="mt-1 text-sm text-black">
+                                  <p className="mt-1 text-sm text-gray-600">
                                     {booking.start_time.slice(
                                       0,
                                       5
@@ -432,10 +482,10 @@ export default function Home() {
                       onClick={() =>
                         checkNextAvailable(room.id)
                       }
-                      disabled={checkingAvailability}
-                      className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 text-black hover:bg-gray-50 disabled:opacity-50"
+                      disabled={checkingRoomId === room.id}
+                      className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
-                      {checkingAvailability
+                      {checkingRoomId === room.id
                         ? "Checking..."
                         : "Find Next Available"}
                     </button>
@@ -464,6 +514,7 @@ export default function Home() {
           date={selectedDate}
           onClose={() => setSelectedRoom(null)}
           onBookingCreated={(message) => {
+            setNextAvailable(null);
             fetchBookings();
 
             setToast({
@@ -475,13 +526,16 @@ export default function Home() {
       )}
 
       {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      <AnimatePresence>
+        {toast && (
+          <Toast
+            key={toast.message}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </AnimatePresence>
       {/* Cancellation confirmation */}
       {bookingToCancel && (
         <ConfirmModal

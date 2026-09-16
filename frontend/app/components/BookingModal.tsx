@@ -18,6 +18,25 @@ type BookingModalProps = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// FastAPI sends a string detail for 400/409 but an array of objects for 422.
+function errorDetail(data: unknown, fallback: string) {
+  const detail = (data as { detail?: unknown })?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: string } | undefined;
+
+    if (typeof first?.msg === "string") {
+      return first.msg;
+    }
+  }
+
+  return fallback;
+}
+
 export default function BookingModal({
   room,
   date,
@@ -72,7 +91,7 @@ export default function BookingModal({
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail || "Unable to create booking.");
+        setError(errorDetail(data, "Unable to create booking."));
         return;
       }
 
@@ -95,11 +114,11 @@ export default function BookingModal({
         >
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-black">
+            <h2 className="text-xl font-semibold text-gray-900">
               Book Room
             </h2>
 
-            <p className="mt-1 text-sm text-black">
+            <p className="mt-1 text-sm text-gray-600">
               {room.name} · {date}
             </p>
           </div>
@@ -115,7 +134,7 @@ export default function BookingModal({
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-black">
+            <label className="block text-sm font-medium text-gray-700">
               Meeting Title
             </label>
 
@@ -124,12 +143,12 @@ export default function BookingModal({
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="e.g. Team Meeting"
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-black">
+            <label className="block text-sm font-medium text-gray-700">
               Start Time
             </label>
 
@@ -139,12 +158,12 @@ export default function BookingModal({
               max="18:00"
               value={startTime}
               onChange={(event) => setStartTime(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-black">
+            <label className="block text-sm font-medium text-gray-700">
               End Time
             </label>
 
@@ -154,7 +173,7 @@ export default function BookingModal({
               max="18:00"
               value={endTime}
               onChange={(event) => setEndTime(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400"
             />
           </div>
 
@@ -168,7 +187,7 @@ export default function BookingModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2"
+              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </button>
