@@ -1,0 +1,25 @@
+# Render Blueprint - provisions the API and its PostgreSQL database together.
+# Render Dashboard -> New -> Blueprint -> pick this repository.
+services:
+  - type: web
+    name: meeting-room-booking-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.3
+      - key: DATABASE_URL
+        fromDatabase:
+          name: meeting-room-booking-db
+          property: connectionString
+      # Set to your Vercel URL once the frontend is deployed.
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+databases:
+  - name: meeting-room-booking-db
+    databaseName: meeting_booking
+    plan: free
